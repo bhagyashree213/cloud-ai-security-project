@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  cloudsentinel-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cloudsentinel_soc
+    ports:
+      - "8501:8501"  # Streamlit UI
+      - "8000:8000"  # Ingestion Webhook API
+    environment:
+      - APP_ENV=production
+      - DATABASE_PATH=/app/database/security.db
+      - INGESTION_API_PORT=8000
+      - STREAMLIT_PORT=8501
+    volumes:
+      - ./database:/app/database
+      - ./models:/app/models
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

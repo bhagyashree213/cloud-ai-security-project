@@ -1,0 +1,51 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudSentinelS3PrefixBucketActions",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::cloudsentinel-security-vault"
+      ],
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "datasets/*",
+            "logs/*",
+            "reports/*",
+            "backups/*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "CloudSentinelS3ObjectLevelActions",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:PutObjectAcl"
+      ],
+      "Resource": [
+        "arn:aws:s3:::cloudsentinel-security-vault/datasets/*",
+        "arn:aws:s3:::cloudsentinel-security-vault/logs/*",
+        "arn:aws:s3:::cloudsentinel-security-vault/reports/*",
+        "arn:aws:s3:::cloudsentinel-security-vault/backups/*"
+      ]
+    },
+    {
+      "Sid": "EnforceServerSideEncryption",
+      "Effect": "Deny",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::cloudsentinel-security-vault/*",
+      "Condition": {
+        "StringNotEquals": {
+          "s3:x-amz-server-side-encryption": "AES256"
+        }
+      }
+    }
+  ]
+}

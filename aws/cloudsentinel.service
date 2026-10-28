@@ -1,0 +1,28 @@
+[Unit]
+Description=CloudSentinel AI Security & Threat Detection System
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/CloudSentinel
+ExecStart=/home/ubuntu/CloudSentinel/venv/bin/streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=cloudsentinel
+
+# Security Sandboxing Options
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/CloudSentinel/database /home/ubuntu/CloudSentinel/data /home/ubuntu/CloudSentinel/models
+
+# AWS Configuration (IAM instance profile automatically discovered by Boto3)
+Environment=PYTHONUNBUFFERED=1
+Environment=AWS_DEFAULT_REGION=ap-south-1
+Environment=CLOUDSENTINEL_S3_BUCKET=cloudsentinel-security-vault
+
+[Install]
+WantedBy=multi-user.target

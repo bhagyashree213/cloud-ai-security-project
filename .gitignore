@@ -1,0 +1,17 @@
+venv/
+.venv/
+ven/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+.aws/
+*.db
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+database/*
+!database/
+!database/database.py
