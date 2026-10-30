@@ -15,3 +15,11 @@ __pycache__/
 database/*
 !database/
 !database/database.py
+!database/models.py
+
+# Office temp/lock files
+~$*
+
+# OS files
+Thumbs.db
+.DS_Store
