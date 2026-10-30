@@ -22,7 +22,6 @@ from database.database import (
     init_db,
     fetch_website_assessments,
     get_system_kpis,
-    fetch_model_evaluations,
     log_audit
 )
 from aws_s3 import upload_bytes_to_s3
@@ -127,62 +126,6 @@ if assessments:
         st.plotly_chart(fig_bar, use_container_width=True)
 else:
     st.info("No website assessments recorded yet. Run website checks to populate visualization charts.")
-
-st.markdown("---")
-
-# -------------------------------------------------------------
-# 3. AI CLASSIFICATION MODELS BENCHMARK
-# -------------------------------------------------------------
-st.subheader("🧠 AI Classification Models Benchmark")
-st.caption("Performance metrics across evaluated machine learning classification models:")
-
-evals = fetch_model_evaluations()
-if evals:
-    eval_df = pd.DataFrame(evals)
-    # Deduplicate keeping latest evaluation per model
-    eval_df = eval_df.drop_duplicates(subset=["model_name"], keep="first")
-    sup_models = eval_df[eval_df["model_type"] == "Supervised Classifier"].copy()
-
-    allowed = [
-        "Random Forest Classifier",
-        "Gradient Boosting Classifier",
-        "Support Vector Machine (SVM)",
-        "Logistic Regression",
-        "Decision Tree Classifier"
-    ]
-    sup_models = sup_models[sup_models["model_name"].isin(allowed)]
-
-    disp_cols = ["model_name", "algorithm", "accuracy", "precision_score", "recall_score", "f1_score", "roc_auc", "training_time_sec", "is_active"]
-    avail_cols = [c for c in disp_cols if c in sup_models.columns]
-
-    fmt_df = sup_models[avail_cols].copy()
-    fmt_df.rename(columns={
-        "model_name": "Model Name",
-        "algorithm": "Algorithm",
-        "accuracy": "Accuracy",
-        "precision_score": "Precision",
-        "recall_score": "Threat Recall",
-        "f1_score": "F1-Score",
-        "roc_auc": "ROC-AUC",
-        "training_time_sec": "Train Latency",
-        "is_active": "Champion"
-    }, inplace=True)
-
-    st.dataframe(
-        fmt_df.style.format({
-            "Accuracy": "{:.2%}",
-            "Precision": "{:.2%}",
-            "Threat Recall": "{:.2%}",
-            "F1-Score": "{:.2%}",
-            "ROC-AUC": "{:.2%}",
-            "Train Latency": "{:.4f}s",
-            "Champion": lambda x: "🏆 Champion" if x == 1 else "Candidate"
-        }),
-        use_container_width=True,
-        hide_index=True
-    )
-else:
-    st.info("No model evaluations stored yet. Visit the Model Comparison page to initialize benchmarks.")
 
 st.markdown("---")
 
