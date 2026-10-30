@@ -551,7 +551,7 @@ def analyze_website_security(target_input: str) -> Dict[str, Any]:
     Orchestrates complete safe defensive analysis workflow for a target website.
     Enforces SSRF prevention, checks HTTPS/TLS, queries headers, audits VirusTotal reputation,
     and synthesizes an objective overall assessment with explainable evidence:
-      - 'Potentially Malicious'
+      - 'Potentially Malicious' (includes DNS resolution failures — indicator of phishing/fake domains)
       - 'No Threat Detected by Available Sources'
       - 'Unable to Determine'
     """
@@ -579,11 +579,42 @@ def analyze_website_security(target_input: str) -> Dict[str, Any]:
     safe_dns, resolved_ips, dns_err = resolve_hostname_safely(hostname)
     if not safe_dns:
         is_ssrf = "ssrf" in dns_err.lower() or "prohibited" in dns_err.lower() or "blocked" in dns_err.lower()
-        overall_assessment = "Potentially Malicious" if is_ssrf else "Unable to Determine"
-        res_color = "#ef4444" if is_ssrf else "#94a3b8"
+        is_dns_failure = "dns resolution failed" in dns_err.lower() or "getaddrinfo failed" in dns_err.lower() or "no ip addresses resolved" in dns_err.lower()
+
+        # Both SSRF blocks AND DNS resolution failures are classified as Potentially Malicious.
+        # A domain that fails DNS resolution is a strong indicator of a suspicious/phishing domain
+        # (e.g. fake government domains, typosquatting, expired infrastructure).
+        if is_ssrf or is_dns_failure:
+            overall_assessment = "Potentially Malicious"
+            res_color = "#ef4444"  # Red
+            severity = "HIGH"
+        else:
+            overall_assessment = "Unable to Determine"
+            res_color = "#94a3b8"  # Slate
+            severity = "LOW"
+
+        if is_ssrf:
+            error_type = "SSRF_DEFENSE_BLOCKED"
+            summary_text = f"SSRF Attack Blocked: Attempted access to prohibited destination ({dns_err})"
+            evidence_summary = "Prohibited destination blocked by Server-Side Request Forgery (SSRF) defense rules."
+            evidence_detail = "Inspection halted to prevent unauthorized probing of internal or cloud metadata infrastructure."
+            reputation_msg = "Reputation lookup bypassed due to prohibited destination block."
+        elif is_dns_failure:
+            error_type = "DNS_RESOLUTION_FAILED"
+            summary_text = f"Potentially Malicious: Domain does not resolve — possible phishing, typosquatting, or decommissioned malicious infrastructure ({dns_err})"
+            evidence_summary = "Domain failed DNS resolution. Non-existent or decommissioned domains impersonating legitimate services are a strong phishing/malicious indicator."
+            evidence_detail = "DNS lookup returned no valid records. The domain may be fraudulent, expired, or taken down."
+            reputation_msg = "Domain does not resolve — flagged as potentially malicious infrastructure."
+        else:
+            error_type = "DNS_RESOLUTION_ERROR"
+            summary_text = f"DNS Resolution Failed: {dns_err}"
+            evidence_summary = "Domain could not be resolved via DNS."
+            evidence_detail = "DNS lookup returned no valid records."
+            reputation_msg = "DNS resolution failed"
+
         return {
             "success": False,
-            "error_type": "SSRF_DEFENSE_BLOCKED" if is_ssrf else "DNS_RESOLUTION_ERROR",
+            "error_type": error_type,
             "error": dns_err,
             "checked_at": check_timestamp,
             "input_url": target_input,
@@ -592,19 +623,19 @@ def analyze_website_security(target_input: str) -> Dict[str, Any]:
             "resolved_ips": resolved_ips,
             "overall_assessment": overall_assessment,
             "assessment_color": res_color,
-            "severity": "HIGH" if is_ssrf else "LOW",
-            "summary": f"SSRF Attack Blocked: Attempted access to prohibited destination ({dns_err})" if is_ssrf else f"DNS Resolution Failed: {dns_err}",
+            "severity": severity,
+            "summary": summary_text,
             "evidence": {
-                "summary": "Prohibited destination blocked by Server-Side Request Forgery (SSRF) defense rules." if is_ssrf else "Domain could not be resolved via DNS.",
+                "summary": evidence_summary,
                 "items": [
                     f"Blocked destination: {dns_err}",
-                    "Inspection halted to prevent unauthorized probing of internal or cloud metadata infrastructure." if is_ssrf else "DNS lookup returned no valid records."
+                    evidence_detail
                 ],
                 "sources_checked": ["SSRF IP / DNS Validator"]
             },
             "tls_info": {"https_available": False, "cert_valid": False, "error": dns_err},
             "http_info": {"success": False, "error": dns_err, "headers_found": {}, "missing_headers": []},
-            "reputation_info": {"available": False, "message": "Reputation lookup bypassed due to prohibited destination block." if is_ssrf else "DNS resolution failed"}
+            "reputation_info": {"available": False, "message": reputation_msg}
         }
 
     # 3. TLS Certificate Inspection (Port 443)
@@ -683,10 +714,13 @@ def analyze_website_security(target_input: str) -> Dict[str, Any]:
         evidence_items.append(f"VirusTotal lookup: {reputation_info.get('message')}")
 
     # 7. Final Assessment Synthesis (Strictly one of the 3 required outcomes)
+    # Unreachable sites (both HTTP and TLS fail) are flagged as Potentially Malicious —
+    # legitimate websites maintain reachable infrastructure; unreachable domains are
+    # a strong indicator of phishing, decommissioned malware, or fraudulent infrastructure.
     if not http_info.get("success") and not tls_info.get("https_available"):
-        overall_assessment = "Unable to Determine"
-        assessment_color = "#94a3b8"  # Slate
-        summary = "The target endpoint could not be reached safely or returned a network communication error."
+        overall_assessment = "Potentially Malicious"
+        assessment_color = "#ef4444"  # Red
+        summary = "Potentially Malicious: Target endpoint is completely unreachable (both HTTPS and HTTP failed). Legitimate services maintain accessible infrastructure — unreachable domains are a strong indicator of phishing, decommissioned malware, or fraudulent infrastructure."
     elif reputation_info.get("available") and (reputation_info.get("malicious_count", 0) > 0 or reputation_info.get("suspicious_count", 0) >= 2):
         overall_assessment = "Potentially Malicious"
         assessment_color = "#ef4444"  # Red
